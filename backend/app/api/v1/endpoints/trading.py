@@ -1,14 +1,19 @@
-from typing import Any, List
-from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import Any, List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 
 from app import crud, models, schemas
-from app.core.deps import get_current_active_user, get_db
+from app.core.deps import get_current_active_user, get_db, get_current_user
 from app.services.trading import trading_service
 from app.services.ai_trading import ai_trading_service
+from app.schemas.trading import OrderCreate, Order, Position, Portfolio
+from app.crud.trading import trading_crud
+import logging
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # Trading Account endpoints
 @router.get("/accounts", response_model=List[schemas.TradingAccount])
@@ -278,4 +283,174 @@ async def get_positions(
         raise HTTPException(
             status_code=400,
             detail=f"Failed to get positions: {str(e)}",
-        ) 
+        )
+
+@router.post("/orders", response_model=Order)
+async def create_order(
+    order: OrderCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Create a new trading order
+    """
+    try:
+        # Validate order parameters
+        if order.quantity <= 0:
+            raise HTTPException(status_code=400, detail="Order quantity must be positive")
+            
+        # Check if we have sufficient buying power
+        portfolio = await trading_crud.get_portfolio(db, current_user.id)
+        if order.side == "buy":
+            # Get current market price
+            market_data = await trading_service.get_quote(order.symbol)
+            required_funds = order.quantity * market_data.price
+            
+            if required_funds > portfolio.buying_power:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Insufficient buying power for this order"
+                )
+
+        # Create order in database
+        db_order = await trading_crud.create_order(
+            db,
+            order=order,
+            user_id=current_user.id
+        )
+
+        # Execute order in background
+        background_tasks.add_task(
+            trading_service.execute_order,
+            db=db,
+            order_id=db_order.id
+        )
+
+        return db_order
+
+    except Exception as e:
+        logger.error(f"Error creating order: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/orders", response_model=List[Order])
+async def get_orders(
+    status: Optional[str] = None,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Get user's orders with optional status filter
+    """
+    try:
+        orders = await trading_crud.get_orders(
+            db,
+            user_id=current_user.id,
+            status=status,
+            limit=limit
+        )
+        return orders
+    except Exception as e:
+        logger.error(f"Error fetching orders: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/positions", response_model=List[Position])
+async def get_positions(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Get user's current positions
+    """
+    try:
+        positions = await trading_crud.get_positions(db, user_id=current_user.id)
+        
+        # Enrich positions with current market data
+        for position in positions:
+            try:
+                market_data = await trading_service.get_quote(position.symbol)
+                position.current_price = market_data.price
+                position.market_value = position.quantity * market_data.price
+                position.unrealized_pl = position.market_value - (position.quantity * position.average_entry_price)
+            except Exception as e:
+                logger.error(f"Error enriching position data for {position.symbol}: {str(e)}")
+                
+        return positions
+    except Exception as e:
+        logger.error(f"Error fetching positions: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/portfolio", response_model=Portfolio)
+async def get_portfolio(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Get user's portfolio summary
+    """
+    try:
+        portfolio = await trading_crud.get_portfolio(db, user_id=current_user.id)
+        
+        # Calculate total equity and other metrics
+        positions = await trading_crud.get_positions(db, user_id=current_user.id)
+        total_position_value = 0
+        
+        for position in positions:
+            try:
+                market_data = await trading_service.get_quote(position.symbol)
+                position_value = position.quantity * market_data.price
+                total_position_value += position_value
+            except Exception as e:
+                logger.error(f"Error calculating position value for {position.symbol}: {str(e)}")
+        
+        portfolio.equity = portfolio.buying_power + total_position_value
+        return portfolio
+    except Exception as e:
+        logger.error(f"Error fetching portfolio: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/analyze/{symbol}")
+async def analyze_symbol(
+    symbol: str,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Get AI trading analysis for a symbol
+    """
+    try:
+        if not ai_trading_service:
+            raise HTTPException(
+                status_code=503,
+                detail="AI trading service is not available"
+            )
+            
+        analysis = await ai_trading_service.analyze_market_data(symbol)
+        return analysis
+    except Exception as e:
+        logger.error(f"Error analyzing symbol {symbol}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/backtest/{symbol}")
+async def backtest_strategy(
+    symbol: str,
+    days: int = 30,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Backtest trading strategy for a symbol
+    """
+    try:
+        if not ai_trading_service:
+            raise HTTPException(
+                status_code=503,
+                detail="AI trading service is not available"
+            )
+            
+        results = await ai_trading_service.backtest_strategy(symbol, days)
+        return results
+    except Exception as e:
+        logger.error(f"Error backtesting strategy for {symbol}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e)) 
