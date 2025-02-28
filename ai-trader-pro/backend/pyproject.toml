@@ -1,0 +1,37 @@
+[tool.poetry]
+name = "ai-trader-pro-backend"
+version = "0.1.0"
+description = "AI-powered trading platform backend"
+authors = ["AI Trader Pro Team"]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<4.0"
+fastapi = "^0.115.9"
+uvicorn = {extras = ["standard"], version = "^0.34.0"}
+sqlalchemy = "^2.0.38"
+pydantic = "^2.10.6"
+python-jose = "^3.4.0"
+passlib = "^1.7.4"
+python-multipart = "^0.0.20"
+alembic = "^1.14.1"
+websockets = ">=9.0,<11"
+redis = "^5.2.1"
+celery = "^5.4.0"
+yfinance = "^0.2.54"
+alpaca-trade-api = "^3.2.0"
+pandas = "^2.2.3"
+numpy = "^1.24.0"
+scikit-learn = "^1.6.1"
+openai = "^1.65.1"
+python-dotenv = "^1.0.1"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.4"
+black = "^25.1.0"
+isort = "^6.0.1"
+flake8 = "^7.1.2"
+mypy = "^1.15.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api" 

@@ -1,0 +1,50 @@
+---
+description: General rules for AI Trader Pro
+globs: 
+---
+
+AI Trader Pro - Project Rules (Cursor AI)
+
+1️⃣ Code Structure & File Management
+	•	Keep files under 500 lines whenever possible for better readability and maintainability.
+	•	Modular approach: Break large functionalities into separate, reusable components or modules.
+	•	Use meaningful folder structure:
+	•	frontend/ → React frontend
+	•	backend/ → FastAPI/Flask backend
+	•	infrastructure/ → Deployment (Docker, Kubernetes, Terraform)
+	•	scripts/ → Automation scripts
+	•	docs/ → Documentation
+	•	tests/ → Unit and integration tests
+
+2️⃣ Development Guidelines
+	•	Use TypeScript for frontend (React + Vite).
+	•	Follow RESTful API best practices in backend.
+	•	Write clean, well-documented code.
+	•	Ensure AI-generated code follows project rules before committing.
+
+3️⃣ UI/UX Standards
+	•	Professional & beginner-friendly UI.
+	•	Support light & dark mode with seamless switching.
+	•	Every feature must include tooltips, hints, or help guides.
+	•	AI must overlay suggested trades directly on charts.
+	•	Customizable dashboard layout for traders.
+
+4️⃣ AI & Automation Rules
+	•	AI must dynamically apply the best indicators to assist in market predictions.
+	•	AI must provide real-time trade monitoring and strategy recommendations.
+	•	TradingView Webhooks trigger automated trades (optional approval setting).
+	•	Webull API executes trades with risk management in place.
+	•	Paper trading mode must be available for safe testing.
+
+5️⃣ Testing & Reliability
+	•	Every feature must have automated tests before deployment.
+	•	All trading logic must be validated with backtesting.
+	•	Error handling must be built-in for API failures, incorrect data, or trade execution errors.
+
+6️⃣ Deployment & Performance
+	•	Frontend deployed on Netlify (with CI/CD).
+	•	Backend deployed on Render/Railway (with scaling).
+	•	Ensure Supabase is optimized for queries to prevent slow performance.
+	•	Monitor and log API reliability to prevent downtime.
+
+Cursor AI must follow these rules strictly throughout development. 🚀
